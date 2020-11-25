@@ -1,6 +1,8 @@
 import React, { Component } from 'react';
 import axios from 'axios';
 import PropTypes from 'prop-types';
+import classNames from 'classnames';
+import { sortBy } from 'lodash';
 import './App.css';
 
 const DEFAULT_QUERY = 'redux';
@@ -11,6 +13,14 @@ const PATH_SEARCH = '/search';
 const PARAM_SEARCH = 'query=';
 const PARAM_PAGE = 'page=';
 const PARAM_HPP = 'hitsPerPage=';
+
+const SORTS = {
+  NONE: (list) => list,
+  TITLE: (list) => sortBy(list, 'title'),
+  AUTHOR: (list) => sortBy(list, 'author'),
+  COMMENTS: (list) => sortBy(list, 'num_comments').reverse(),
+  POINTS: (list) => sortBy(list, 'points').reverse(),
+};
 
 class App extends Component {
   _isMounted = false;
@@ -24,6 +34,8 @@ class App extends Component {
       searchTerm: DEFAULT_QUERY,
       error: null,
       isLoading: false,
+      sortKey: 'NONE',
+      isSortReverse: false,
     };
 
     this.needsToSearchTopStories = this.needsToSearchTopStories.bind(this);
@@ -31,6 +43,7 @@ class App extends Component {
     this.onSearchChange = this.onSearchChange.bind(this);
     this.onSearchSubmit = this.onSearchSubmit.bind(this);
     this.onDismiss = this.onDismiss.bind(this);
+    this.onSort = this.onSort.bind(this);
   }
 
   componentDidMount() {
@@ -45,6 +58,13 @@ class App extends Component {
 
   componentWillUnmount() {
     this._isMounted = false;
+  }
+
+  onSort(sortKey) {
+    const isSortReverse =
+      this.state.sortKey === sortKey && !this.state.isSortReverse;
+
+    this.setState({ sortKey, isSortReverse });
   }
 
   needsToSearchTopStories(searchTerm) {
@@ -109,7 +129,15 @@ class App extends Component {
   }
 
   render() {
-    const { searchTerm, results, searchKey, error, isLoading } = this.state;
+    const {
+      searchTerm,
+      results,
+      searchKey,
+      error,
+      isLoading,
+      sortKey,
+      isSortReverse,
+    } = this.state;
     const page =
       (results && results[searchKey] && results[searchKey].page) || 0;
     const list =
@@ -132,7 +160,13 @@ class App extends Component {
           </div>
         ) : (
           <>
-            <Table list={list} onDismiss={this.onDismiss} />
+            <Table
+              list={list}
+              sortKey={sortKey}
+              isSortReverse={isSortReverse}
+              onDismiss={this.onDismiss}
+              onSort={this.onSort}
+            />
             <div className="interactions">
               <ButtonWithLoading
                 isLoading={isLoading}
@@ -183,28 +217,82 @@ Search.defaultProps = {
   value: '',
 };
 
-const Table = ({ list, onDismiss }) => (
-  <div className="table">
-    {list.map((item) => (
-      <div key={item.objectID} className="table-row">
+const Sort = ({ sortKey, activeSortKey, onSort, children }) => {
+  const sortClass = classNames('button-inline', {
+    'button-active': sortKey === activeSortKey,
+  });
+
+  return (
+    <Button onClick={() => onSort(sortKey)} className={sortClass}>
+      {children || 'Sort'}
+    </Button>
+  );
+};
+
+Sort.propTypes = {
+  sortKey: PropTypes.string,
+  onSort: PropTypes.func.isRequired,
+  children: PropTypes.node,
+  activeSortKey: PropTypes.string,
+};
+
+Sort.defaultProps = {
+  className: '',
+  activeSortKey: 'NONE',
+};
+
+const Table = ({ list, onDismiss, sortKey, isSortReverse, onSort }) => {
+  const sortedList = SORTS[sortKey](list);
+
+  const reverseSortedList = isSortReverse ? sortedList.reverse() : sortedList;
+
+  return (
+    <div className="table">
+      <div className="table-header">
         <span style={{ width: '40%' }}>
-          <a href={item.url}>{item.title}</a>
+          <Sort sortKey={'TITLE'} onSort={onSort} activeSortKey={sortKey}>
+            Header
+          </Sort>
         </span>
-        <span style={{ width: '30%' }}>{item.author}</span>
-        <span style={{ width: '10%' }}>{item.num_comments}</span>
-        <span style={{ width: '10%' }}>{item.points}</span>
+        <span style={{ width: '30%' }}>
+          <Sort sortKey={'AUTHOR'} onSort={onSort} activeSortKey={sortKey}>
+            Author
+          </Sort>
+        </span>
         <span style={{ width: '10%' }}>
-          <Button
-            onClick={() => onDismiss(item.objectID)}
-            className="button-inline"
-          >
-            Dismiss
-          </Button>
+          <Sort sortKey={'COMMENTS'} onSort={onSort} activeSortKey={sortKey}>
+            Comments
+          </Sort>
         </span>
+        <span style={{ width: '10%' }}>
+          <Sort sortKey={'POINTS'} onSort={onSort} activeSortKey={sortKey}>
+            Points
+          </Sort>
+        </span>
+        <span style={{ width: '10%' }}>Arhive</span>
       </div>
-    ))}
-  </div>
-);
+
+      {reverseSortedList.map((item) => (
+        <div key={item.objectID} className="table-row">
+          <span style={{ width: '40%' }}>
+            <a href={item.url}>{item.title}</a>
+          </span>
+          <span style={{ width: '30%' }}>{item.author}</span>
+          <span style={{ width: '10%' }}>{item.num_comments}</span>
+          <span style={{ width: '10%' }}>{item.points}</span>
+          <span style={{ width: '10%' }}>
+            <Button
+              onClick={() => onDismiss(item.objectID)}
+              className="button-inline"
+            >
+              Dismiss
+            </Button>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 Table.propTypes = {
   list: PropTypes.arrayOf(
@@ -217,6 +305,14 @@ Table.propTypes = {
     }),
   ).isRequired,
   onDismiss: PropTypes.func.isRequired,
+  sortKey: PropTypes.string,
+  isSortReverse: PropTypes.bool,
+  onSort: PropTypes.func.isRequired,
+};
+
+Table.defaultProps = {
+  sortKey: 'NONE',
+  isSortReverse: false,
 };
 
 const Button = ({ onClick, className, children }) => (
