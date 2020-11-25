@@ -134,17 +134,12 @@ class App extends Component {
           <>
             <Table list={list} onDismiss={this.onDismiss} />
             <div className="interactions">
-              {isLoading ? (
-                <Loading />
-              ) : (
-                <Button
-                  onClick={() =>
-                    this.fetchSearchTopStories(searchKey, page + 1)
-                  }
-                >
-                  More stories
-                </Button>
-              )}
+              <ButtonWithLoading
+                isLoading={isLoading}
+                onClick={() => this.fetchSearchTopStories(searchKey, page + 1)}
+              >
+                More stories
+              </ButtonWithLoading>
             </div>
           </>
         )}
@@ -241,5 +236,10 @@ Button.defaultProps = {
 };
 
 const Loading = () => <div>Loading ...</div>;
+
+const withLoading = (Cp) => ({ isLoading, ...props }) =>
+  isLoading ? <Loading /> : <Cp {...props} />;
+
+const ButtonWithLoading = withLoading(Button);
 
 export default App;
